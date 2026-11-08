@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f6f4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="和音の学習">
+<title>和音の学習・テスト</title>
+<style>
+  :root { --bg: #f6f6f4; --panel: #fff; --text: #1d1d1f; --muted: #6e6e73; --line: #dcdcd8; --accent: #2f6fde; --ok: #1e8a4c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); min-height: 100dvh;
+    font-family: -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; -webkit-text-size-adjust: 100%; }
+  main { max-width: 620px; margin: 0 auto; padding: calc(28px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 22px; }
+  h1 { margin: 0; font-size: clamp(24px, 6.5vw, 32px); font-weight: 800; text-align: center; }
+  .lead { margin: 0; text-align: center; font-size: 16px; line-height: 1.8; color: var(--muted); }
+  h2 { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: var(--muted); letter-spacing: .05em; }
+  .list { display: grid; gap: 10px; }
+  .days { grid-template-columns: 1fr 1fr; }
+  a.item { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 92px; padding: 14px 16px; background: var(--panel);
+    border: 2px solid var(--line); border-radius: 16px; color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; transition: transform .06s, border-color .06s; }
+  a.item:active { transform: scale(.98); border-color: var(--accent); }
+  @media (hover: hover) { a.item:hover { border-color: var(--accent); } }
+  .name { font-size: 21px; font-weight: 800; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .name::after { content: "›"; color: var(--accent); font-size: 26px; font-weight: 400; }
+  .sub { font-size: 13px; color: var(--muted); }
+  .done { font-size: 13px; font-weight: 700; color: var(--ok); }
+  .done:empty { display: none; }
+  a.item.is-done { border-color: #bfe3cc; background: #f6fcf8; }
+  .note { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.7; }
+  @media (min-width: 560px) { .days { grid-template-columns: repeat(4, 1fr); } }
+</style>
+</head>
+<body>
+<main>
+  <h1>和音の学習・テスト</h1>
+  <p class="lead">実験者から指示された項目を選んでください。</p>
+
+  <section>
+    <h2>学習</h2>
+    <div class="list days">
+      <a class="item" href="day1.html" data-day="1"><span class="name">1日目</span><span class="done"></span></a>
+      <a class="item" href="day2.html" data-day="2"><span class="name">2日目</span><span class="done"></span></a>
+      <a class="item" href="day3.html" data-day="3"><span class="name">3日目</span><span class="done"></span></a>
+      <a class="item" href="day4.html" data-day="4"><span class="name">4日目</span><span class="done"></span></a>
+    </div>
+  </section>
+
+  <section>
+    <h2>テスト</h2>
+    <div class="list">
+      <a class="item" href="../index.html" data-test="1"><span class="name">調性判断テスト</span><span class="sub">2つのコード進行を聴いて，同じかどうかを答えます</span><span class="done"></span></a>
+    </div>
+  </section>
+
+  <p class="note">✓ はこの端末で終えた項目です（別の端末で行った分は表示されません）。</p>
+</main>
+<script>
+/* この端末で終えた項目に ✓ を付ける（学習・テストの各ページが端末内に残す控えを参照） */
+const GROUP = "match";
+const md = s => { try { const d = new Date(s); return `${d.getMonth() + 1}/${d.getDate()}`; } catch (e) { return ""; } };
+const read = k => { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch (e) { return []; } };
+const mark = (el, list) => {
+  if (!list.length) return;
+  const last = list[list.length - 1];
+  el.classList.add("is-done");
+  el.querySelector(".done").textContent = `✓ 完了（${md(last)}${list.length > 1 ? `・${list.length}回` : ""}）`;
+};
+const learn = read("chord_learning_archive");
+document.querySelectorAll("[data-day]").forEach(el =>
+  mark(el, learn.filter(e => (e.group || GROUP) === GROUP && String(e.day) === el.dataset.day).map(e => e.start)));
+const test = read("tonality_test_archive");
+document.querySelectorAll("[data-test]").forEach(el =>
+  mark(el, test.map(p => (p.summary_obj && p.summary_obj.end_time) || (p.summary_obj && p.summary_obj.start_time)).filter(Boolean)));
+</script>
+</body>
+</html>

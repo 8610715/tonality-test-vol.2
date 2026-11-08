@@ -205,6 +205,7 @@
   .p-note { font-size: 14px; font-weight: 700; color: #7a5a00; border-top: 1px dashed #ecd27a; padding-top: 8px; line-height: 1.6; }
   .point .sub, #instr .sub { font-size: 13px; color: var(--muted); }
   #instr b { color: var(--text); }
+  #backMenu { align-self: center; text-align: center; }
 </style>
 </head>
 <body>
@@ -328,6 +329,7 @@ I IV I vi ii IV V I | 7=bVI | 7=iii   // 20 外[E] 内[S]</textarea>
         <input id="pid" type="text" placeholder="例：A01" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
         <div id="wErr" class="w-err"></div>
         <button id="startBtn" type="button">次へ</button>
+        <a id="backMenu" class="linkbtn hidden" href="#">← メニューに戻る</a>
       </div>
     </section>
     <section id="intro" class="hidden">
@@ -1338,6 +1340,12 @@ async function confirmSettings() {
   showWelcome();
 }
 $("closeSettings").onclick = confirmSettings;
+
+/* メニューページから来た場合は「メニューに戻る」を表示 */
+try {
+  const ref = document.referrer ? new URL(document.referrer) : null;
+  if (ref && ref.origin === location.origin && ref.href !== location.href) { $("backMenu").href = ref.href; $("backMenu").classList.remove("hidden"); }
+} catch (e) {}
 
 /* ===================== 送信・CSV保存（スマホ対応・原因を表示） ===================== */
 function checkGasUrl(url) {
