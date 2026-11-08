@@ -371,7 +371,7 @@ const CONFIG = {
   ALTER_POS: [5, 6, 7],   // 改変できる位置（1始まり）
   LEAD_IN: 1.0,           // ボタンを押してから最初の和音までの秒数
   // Apps Script ウェブアプリのURL。ここに書いておくと毎回入力しなくて済みます（設定画面の入力が優先）
-  GAS_URL: ""
+  GAS_URL: "https://script.google.com/macros/s/AKfycbzqVCs1I1noldeUwtLq2lvfjjNrGADM7SsXZkmcNIKPaXJVb1arFlgg7qgSVeFyVmjfAQ/exec"
 };
 // 調性内（ダイアトニック）の和音と表記ゆれ
 const DIATONIC = {
@@ -1456,6 +1456,9 @@ $("closeCsv").onclick = () => $("csvBox").classList.add("hidden");
 $("gasUrl").addEventListener("input", () => { const v = $("gasUrl").value.replace(/\s+/g, ""); if (v !== $("gasUrl").value) $("gasUrl").value = v; });
 $("gasUrl").addEventListener("change", () => { fixGasUrl(); try { localStorage.setItem("tonality_test_gas_url", $("gasUrl").value.trim()); } catch (e) {} const b = checkGasUrl(gasUrl()); netState(b, b ? "ng" : ""); });
 updateArchiveInfo();
+
+// 端末に古い・誤ったURLが残っていたら，組み込みのURLを使う
+if (CONFIG.GAS_URL && checkGasUrl($("gasUrl").value.trim())) $("gasUrl").value = CONFIG.GAS_URL;
 
 showSettings(false);
 showWelcome();
