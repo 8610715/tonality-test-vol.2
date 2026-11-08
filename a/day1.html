@@ -167,6 +167,11 @@
   .w-note { font-size: 14px; color: var(--muted); line-height: 1.7; }
   #pSound { width: 100%; font-size: 16px; min-height: 52px; border-radius: 14px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
   #nextBtn:disabled { opacity: .5; }
+  .netstate { font-size: 14px; line-height: 1.6; white-space: pre-line; padding: 0 0 6px; }
+  .netstate:empty, .send-state:empty { display: none; }
+  .netstate.ok { color: #1e8a4c; } .netstate.ng { color: var(--err); } .netstate.wait { color: var(--muted); }
+  .send-state { font-size: 14px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+  .send-state.ng { color: var(--err); }
   .day-badge { font-size: 16px; font-weight: 700; color: var(--accent); background: #e9f0fd; border-radius: 999px; padding: 6px 16px; }
   #endMsg { line-height: 1.8; }
   @media (orientation: landscape) and (max-height: 520px) { .steps li { font-size: 14px; padding-top: 8px; padding-bottom: 8px; } #welcome, #intro { gap: 10px; } }
@@ -211,6 +216,14 @@
       </details>
     </div>
     <div class="card wide">
+      <h3>記録の送信（Google ドライブ）</h3>
+      <div class="hint">学習を最後まで終えると自動で送信します。送れなかった記録は端末に保管し，次にページを開いたときに自動で再送します。</div>
+      <div class="btn-row">
+        <button class="btn" id="pingBtn" type="button">接続テスト</button>
+        <button class="btn" id="resendBtn" type="button">未送信データを送信</button>
+      </div>
+      <div id="netState" class="netstate"></div>
+      <div id="pending" class="hint"></div>
       <h3>記録（CSVで保存）</h3>
       <div class="btn-row">
         <button class="btn" id="saveBtn" type="button">最新のセッション</button>
@@ -256,7 +269,7 @@
   <div id="instr"></div>
   <div id="mapWrap"><svg id="ring" viewBox="0 0 100 100"></svg></div>
   <button id="nextBtn" class="hidden">スタート</button>
-  <div id="endMsg" class="hidden">これで学習は終了です。お疲れさまでした。<br>端末を実験者に返してください。</div>
+  <div id="endMsg" class="hidden">これで今日の学習は終了です。お疲れさまでした。<div id="sendState" class="send-state"></div></div>
 </main>
 
 <script>
@@ -858,6 +871,7 @@ function archiveSession() {
   let a = getArchive().filter(x => x.id !== entry.id).concat([entry]);
   for (;;) { try { localStorage.setItem(AKEY, JSON.stringify(a)); break; } catch (e) { if (a.length <= 1) break; a = a.slice(1); } }
   updateArchiveInfo();
+  sendSession(entry);
 }
 function updateArchiveInfo() { const n = getArchive().length; $("archiveInfo").textContent = n ? `端末内に保存済みのセッション：${n}件` : ""; }
 const LOG_COLS = ["participant","group","device","day","type","wall","seq","progression","rep","chord_index","key","chord",
@@ -914,6 +928,73 @@ try {
   const ref = document.referrer ? new URL(document.referrer) : null;
   if (ref && ref.origin === location.origin && ref.href !== location.href) { $("backMenu").href = ref.href; $("backMenu").classList.remove("hidden"); }
 } catch (e) {}
+
+/* ===================== 追加：Google ドライブへの自動送信 ===================== */
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzqVCs1I1noldeUwtLq2lvfjjNrGADM7SsXZkmcNIKPaXJVb1arFlgg7qgSVeFyVmjfAQ/exec";
+const PKEY = "chord_learning_pending";
+const getPending = () => { try { return JSON.parse(localStorage.getItem(PKEY) || "[]"); } catch (e) { return []; } };
+const setPending = a => { try { localStorage.setItem(PKEY, JSON.stringify(a)); } catch (e) {} const n = a.length; $("pending").textContent = n ? `未送信：${n}件` : ""; };
+const SUM_COLS = ["session_id","participant","group","device","day","start_time","end_time","n_seqs","n_presses","n_correct","accuracy","mean_abs_asynchrony_ms","median_asynchrony_ms","n_stopped"];
+function buildLearnPayload(en) {
+  const sid = `${en.pid}_${GROUP}_d${en.day}_${Date.parse(en.start).toString(36)}`;
+  const cols = ["session_id"].concat(LOG_COLS);
+  const vals = en.rows.map(r => [sid].concat(LOG_COLS.map(c =>
+    c === "participant" ? en.pid : c === "group" ? (en.group || GROUP) : c === "device" ? DEVICE : c === "day" ? (en.day || "") : (r[c] == null ? "" : r[c]))));
+  const pr = en.rows.filter(r => r.type === "press");
+  const asy = pr.map(r => r.asynchrony_ms).filter(v => typeof v === "number").sort((a, b) => a - b);
+  const end = (en.rows.filter(r => r.type === "session_end").pop() || {}).wall || "";
+  const summary = {
+    session_id: sid, participant: en.pid, group: en.group || GROUP, device: DEVICE, day: en.day || "",
+    start_time: en.start, end_time: end, n_seqs: en.rows.filter(r => r.type === "seq_start").length,
+    n_presses: pr.length, n_correct: pr.filter(r => r.correct).length,
+    accuracy: pr.length ? +(pr.filter(r => r.correct).length / pr.length).toFixed(3) : "",
+    mean_abs_asynchrony_ms: asy.length ? Math.round(asy.reduce((a, v) => a + Math.abs(v), 0) / asy.length) : "",
+    median_asynchrony_ms: asy.length ? asy[Math.floor((asy.length - 1) / 2)] : "",
+    n_stopped: en.rows.filter(r => r.type === "stopped").length
+  };
+  return { kind: "learn", session_id: sid, trial_columns: cols, trials: vals,
+    summary_columns: SUM_COLS, summary: SUM_COLS.map(c => summary[c] == null ? "" : summary[c]),
+    csv_name: `learn_${en.group || GROUP}_day${en.day}_${en.pid}_${stamp(en.start)}.csv` };
+}
+async function postPayload(payload) {
+  let r;
+  try { r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload), redirect: "follow", cache: "no-store" }); }
+  catch (e) { return { ok: false, reason: navigator.onLine === false ? "インターネットに接続されていません" : "送信先から応答を受け取れませんでした（Apps Script のデプロイ設定を確認してください）" }; }
+  let text = ""; try { text = await r.text(); } catch (e) {}
+  let j = null; try { j = JSON.parse(text); } catch (e) {}
+  if (j) return j.ok ? { ok: true, info: j } : { ok: false, reason: "スクリプトでエラー：" + (j.error || "不明") };
+  return { ok: false, reason: `送信先の応答を読めませんでした（HTTP ${r.status}）` };
+}
+function netState(t, cls) { $("netState").textContent = t; $("netState").className = "netstate " + (cls || ""); }
+let sending = false;
+async function sendPending(silent) {
+  if (sending) return; sending = true;
+  const list = getPending();
+  if (!list.length) { sending = false; if (!silent) netState("未送信のデータはありません", "ok"); return true; }
+  netState(`送信中…（${list.length}件）`, "wait");
+  const left = []; let reason = "", warn = "";
+  for (const p of list) { const r = await postPayload(p); if (!r.ok) { left.push(p); reason = r.reason; } else if (r.info && r.info.warning) warn = r.info.warning; }
+  setPending(left); sending = false;
+  if (!left.length) netState(warn ? `送信しました（${list.length}件）。ただし：\n${warn}` : `送信しました（${list.length}件）`, warn ? "ng" : "ok");
+  else netState(`送信できませんでした（残り${left.length}件）：\n${reason}`, "ng");
+  return !left.length;
+}
+async function sendSession(en) {
+  const p = buildLearnPayload(en);
+  setPending(getPending().filter(x => x.session_id !== p.session_id).concat([p]));
+  const st = $("sendState"); st.className = "send-state"; st.textContent = "記録を送信しています…";
+  const ok = await sendPending(true);
+  st.textContent = ok ? "記録を送信しました。このページを閉じてかまいません。" : "記録を送信できませんでした。通信のよい場所でこのページを開き直すと，自動で送信されます。";
+  st.className = "send-state" + (ok ? "" : " ng");
+}
+$("pingBtn").onclick = async () => {
+  netState("接続を確認しています…", "wait");
+  const r = await postPayload({ action: "ping" });
+  netState(r.ok ? "接続OK" + (r.info && r.info.folder ? `\n保存先：${r.info.folder}` : "") + (r.info && r.info.warning ? `\n⚠ ${r.info.warning}` : "") : "接続できません：\n" + r.reason, r.ok && !(r.info && r.info.warning) ? "ok" : "ng");
+};
+$("resendBtn").onclick = () => sendPending(false);
+setPending(getPending());
+if (getPending().length) setTimeout(() => sendPending(true), 1500);   // 前回送れなかった記録を自動で再送
 
 showSettings(false);
 preview();
