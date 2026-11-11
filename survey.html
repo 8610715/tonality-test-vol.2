@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f6f4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<title>音楽経験アンケート</title>
+<style>
+  :root { --bg: #f6f6f4; --panel: #fff; --text: #1d1d1f; --muted: #6e6e73; --line: #dcdcd8; --accent: #2f6fde; --accent-soft: #e9f0fd;
+    --err: #c0392b; --ok: #1e8a4c; --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); }
+  * { box-sizing: border-box; }
+  html, body { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); min-height: 100dvh;
+    font-family: -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .hidden { display: none !important; }
+  main { max-width: 720px; margin: 0 auto; padding: calc(16px + var(--sat)) 14px calc(110px + var(--sab)); }
+
+  /* 上部の進み具合 */
+  #bar { position: sticky; top: 0; z-index: 5; background: rgba(246,246,244,.94); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    margin: 0 -14px 12px; padding: calc(8px + var(--sat)) 14px 10px; border-bottom: 1px solid var(--line); }
+  #bar .row { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  #bar .track { height: 8px; background: #e4e4e0; border-radius: 99px; overflow: hidden; }
+  #bar .fill { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .25s; }
+
+  h1 { font-size: clamp(22px, 6vw, 30px); margin: 10px 0 4px; text-align: center; }
+  .sub-title { text-align: center; color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  h2 { font-size: 20px; margin: 4px 0 6px; }
+  .lead { font-size: 15px; line-height: 1.8; margin: 0 0 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 12px; scroll-margin-top: 90px; }
+  .card.missing { border: 2px solid var(--err); background: #fff8f7; }
+  .q { font-size: 16px; line-height: 1.65; margin-bottom: 12px; display: flex; gap: 8px; }
+  .q .no { flex: none; font-weight: 800; color: var(--accent); min-width: 2em; }
+  .q .opt { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .need { font-size: 13px; color: var(--err); margin-top: 8px; display: none; }
+  .card.missing .need { display: block; }
+
+  /* 7段階 */
+  .lik { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .lik label { position: relative; }
+  .lik input { position: absolute; opacity: 0; pointer-events: none; }
+  .lik span { display: flex; align-items: center; justify-content: center; height: 48px; border-radius: 12px; border: 2px solid var(--line); background: #fff;
+    font-weight: 700; font-size: 18px; cursor: pointer; transition: background .08s, border-color .08s; }
+  .lik input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .lik input:focus-visible + span { outline: 3px solid rgba(47,111,222,.35); }
+  .ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .picked { font-size: 13px; color: var(--accent); font-weight: 700; margin-top: 6px; min-height: 1.3em; text-align: center; }
+  .scale-help { font-size: 13px; color: var(--muted); background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; line-height: 1.7; }
+
+  /* 選択肢（チップ） */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips label { position: relative; }
+  .chips input { position: absolute; opacity: 0; pointer-events: none; }
+  .chips span { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border-radius: 999px; border: 2px solid var(--line); background: #fff; cursor: pointer; font-size: 15px; }
+  .chips input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  .chips input:focus-visible + span { outline: 3px solid rgba(47,111,222,.35); }
+
+  .inline { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 12px; }
+  .inline label { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .inline label { white-space: nowrap; }
+  .inline label > input[type=text] { flex: 1; min-width: 0; width: auto; }
+  input[type=text], input[type=email], input[type=number], select { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: #fff; font-size: 16px; min-height: 46px; }
+  input[type=text], input[type=email] { width: 100%; }
+  input.age { width: 96px; text-align: right; }
+  select { width: 100%; }
+  .check { display: flex; align-items: center; gap: 10px; font-size: 15px; margin-top: 12px; }
+  .check input { width: 24px; height: 24px; accent-color: var(--accent); }
+  .follow { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .follow .lbl { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+
+  /* ID入力・完了 */
+  .w-form { display: flex; flex-direction: column; gap: 10px; }
+  #pid { width: 100%; font-size: 26px; text-align: center; letter-spacing: .08em; min-height: 64px; border-radius: 14px; border: 2px solid var(--line); }
+  #pid:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(47,111,222,.15); }
+  #pid.bad { border-color: var(--err); }
+  .w-err { font-size: 14px; color: var(--err); min-height: 1.4em; white-space: pre-line; }
+  .info { display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.7; }
+  .info div { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .cite { font-size: 11px; color: var(--muted); line-height: 1.6; margin-top: 16px; }
+  #done { text-align: center; padding-top: 40px; }
+  #done .big { font-size: 64px; }
+  #sendState { font-size: 15px; line-height: 1.7; margin-top: 12px; }
+  #sendState.ng { color: var(--err); }
+  #sendState.ok { color: var(--ok); }
+  .linkbtn { border: none; background: none; color: var(--accent); font-size: 14px; text-decoration: underline; padding: 8px 4px; cursor: pointer; }
+
+  /* 下部のボタン */
+  #nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: rgba(255,255,255,.96); border-top: 1px solid var(--line);
+    padding: 10px 14px calc(10px + var(--sab)); display: flex; gap: 10px; justify-content: center; }
+  #nav button { min-height: 56px; border-radius: 14px; font-size: 18px; font-weight: 700; cursor: pointer; }
+  #backBtn { flex: 1; max-width: 200px; background: #fff; border: 1px solid var(--line); }
+  #nextBtn { flex: 2; max-width: 460px; background: var(--accent); color: #fff; border: none; }
+  #nextBtn:disabled { opacity: .5; }
+  @media (max-width: 380px) { .lik span { height: 44px; font-size: 16px; } .lik { gap: 4px; } }
+</style>
+</head>
+<body>
+<main>
+  <div id="bar" class="hidden"><div class="row"><span id="barStep"></span><span id="barCount"></span></div><div class="track"><div class="fill" id="barFill"></div></div></div>
+
+  <!-- 0：ID入力 -->
+  <section id="s0">
+    <h1>音楽経験アンケート</h1>
+    <p class="sub-title">ゴールドスミス音楽洗練指標（Gold-MSI 日本語版）ほか</p>
+    <div class="info">
+      <div>この質問紙は，音楽経験や音楽的能力などについてのご自身の評価をお尋ねするものです。</div>
+      <div>回答時間は合計<b>15分程度</b>です。途中で閉じても，同じ端末なら入力した内容から再開できます。</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="w-form">
+        <label for="pid" style="font-weight:700;color:var(--muted);font-size:14px">参加者ID（実験者から伝えられたもの）</label>
+        <input id="pid" type="text" placeholder="例：A01" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
+        <div id="wErr" class="w-err"></div>
+      </div>
+    </div>
+    <a id="backMenu" class="linkbtn hidden" href="#">← メニューに戻る</a>
+    <p class="cite">引用文献：Sadakata, M., Yamaguchi, Y., Ohsawa, C., Matsubara, M., Terasawa, H., von Schnehen, A., Müllensiefen, D. &amp; Sekiyama, K. (2022). The Japanese translation of the Gold-MSI: Adaptation and validation of the self-report questionnaire of musical sophistication. <i>Musicae Scientiae</i>.</p>
+  </section>
+
+  <!-- 1：7段階（1〜31） -->
+  <section id="s1" class="hidden">
+    <h2>1. あてはまる程度</h2>
+    <p class="lead">それぞれの文について，ご自身に最もあてはまる数字を選んでください。</p>
+    <div class="scale-help">1 全くあてはまらない ／ 2 ほとんどあてはまらない ／ 3 あまりあてはまらない ／ 4 どちらでもない ／ 5 わりとあてはまる ／ 6 よくあてはまる ／ 7 実によくあてはまる</div>
+    <div id="likertList"></div>
+  </section>
+
+  <!-- 2：音楽経験（32〜41） -->
+  <section id="s2" class="hidden">
+    <h2>2. 音楽経験</h2>
+    <p class="lead">下線部（＿＿）にあてはまる，最も適当な答えを選んでください。</p>
+    <div id="expList"></div>
+  </section>
+
+  <!-- 3：プロフィール -->
+  <section id="s3" class="hidden">
+    <h2>3. あなたについて</h2>
+    <p class="lead">あてはまるものを選んでください。</p>
+    <div id="profList"></div>
+  </section>
+
+  <!-- 完了 -->
+  <section id="done" class="hidden">
+    <div class="big">🙏</div>
+    <h1>ご回答ありがとうございました</h1>
+    <div id="sendState"></div>
+    <button id="retryBtn" class="linkbtn hidden" type="button">もう一度送信する</button>
+    <a id="backMenu2" class="linkbtn hidden" href="#">← メニューに戻る</a>
+  </section>
+</main>
+<div id="nav"><button id="backBtn" type="button" class="hidden">戻る</button><button id="nextBtn" type="button">回答をはじめる</button></div>
+
+<script>
+/* ===================== 設問 ===================== */
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzqVCs1I1noldeUwtLq2lvfjjNrGADM7SsXZkmcNIKPaXJVb1arFlgg7qgSVeFyVmjfAQ/exec";
+const LIK_LABELS = ["全くあてはまらない", "ほとんどあてはまらない", "あまりあてはまらない", "どちらでもない", "わりとあてはまる", "よくあてはまる", "実によくあてはまる"];
+const LIKERT = [
+  "自由時間のほとんどを，音楽に関することに使う",
+  "ゾクゾクするような（もしくは鳥肌が立つような）音楽を聴きたいと思うことがある",
+  "インターネットのブログや掲示板に音楽に関する情報を書くのが楽しい",
+  "知らないメロディーを誰かが歌い始めた時，たいていの場合は一緒に歌うことができる",
+  "歌っている人がうまいかどうか，的確に判断ができる",
+  "聴こえてきた曲が初めて聴く曲かどうかがすぐにわかる",
+  "暗譜で演奏することができる（歌を含む）",
+  "馴染みのない音楽を耳にすると，それについてもっと知りたいと思う",
+  "音楽を聴いてもほとんど感情が揺さぶられない",
+  "知っている曲のメロディーにぴったり合わせて歌うことができる",
+  "知っている曲をアーティストがどこか間違って演奏しても，なかなか気づけない",
+  "同じ曲の違う演奏を聴いたとき，その違いについて比べたり話すことができる",
+  "よく知っている曲でも，いつもと違うやり方で演奏されたり別の人が演奏していると，その曲だとわからないことがある",
+  "自分の音楽的才能や音楽演奏を褒められたことがない",
+  "よく，音楽に関連した情報をインターネットで検索したり読んだりする",
+  "やる気を出すために，特定の音楽をかけることがよくある",
+  "誰かが私の知っている曲を歌っていても，ハモるのはとても難しい",
+  "他の人の歌や演奏が本来のビートからずれていることがわかる",
+  "聴こえてきた曲の特徴を説明することができる",
+  "音楽を聴いたときに湧き上がる感情について話すことができる",
+  "自由に使えるお金を，音楽のためには使わない",
+  "他の人の歌や，演奏の音が外れているかどうかわかる",
+  "自分が歌っているときに，音の高さがあっているかどうか自信がない",
+  "音楽は私にとって一種の中毒で，音楽なしでは生きていけない",
+  "音を外してしまうかもしれないので，人前で歌うのは嫌いだ",
+  "大抵の場合は，聴いた音楽のジャンルがわかる",
+  "私は音楽家ではない",
+  "新しいアーティストや曲の流行を知っている",
+  "知らない歌でも２，３回聴けば歌うことができる",
+  "知らない曲でも一回聴けば，数時間あとでも歌うことができる",
+  "音楽を聴いて，特定の人や場所を思い出すことがある"
+];
+/* 32〜38：選択肢の位置（1〜7）を数値として記録 */
+const EXP = [
+  { no: 32, text: "私はここ＿＿年間，日常的・定期的に楽器（歌を含む）の練習をしている", unit: "年", opts: ["0", "1", "2", "3", "4-5", "6-9", "10かそれ以上"] },
+  { no: 33, text: "興味が最も高かった時期には，メインの楽器（歌を含む）を一日に＿＿時間練習した", unit: "時間", opts: ["0", "0.5", "1", "1.5", "2", "3-4", "5かそれ以上"] },
+  { no: 34, text: "この１２ヶ月の間に＿＿回の生演奏イベントを聴きに行った", unit: "回", opts: ["0", "1", "2", "3", "4-6", "7-10", "11かそれ以上"] },
+  { no: 35, text: "音楽理論の訓練を＿＿年間受けた", unit: "年", opts: ["0", "0.5", "1", "2", "3", "4-6", "7かそれ以上"] },
+  { no: 36, text: "これまでに楽器（歌も含む）の正式な訓練を＿＿年間受けた", unit: "年", opts: ["0", "0.5", "1", "2", "3-5", "6-9", "10かそれ以上"] },
+  { no: 37, text: "私は＿＿種類の楽器を演奏できる", unit: "種類", opts: ["0", "1", "2", "3", "4", "5", "6かそれ以上"] },
+  { no: 38, text: "一日のうち，集中して音楽を聴く時間の長さはたいてい＿＿分（時間）である", unit: "", opts: ["0-15分", "15-30分", "30-60分", "60-90分", "2時間", "2-3時間", "4時間かそれ以上"] }
+];
+const INSTR = ["声楽", "ピアノ", "ギター", "ドラム", "フルート", "オーボエ", "クラリネット", "ファゴット", "トランペット", "トロンボーン", "テューバ", "サクソフォン", "ヴァイオリン", "チェロ", "ヴィオラ", "コントラバス", "ハープ", "その他", "該当しない"];
+const PREFS = ["北海道","青森","岩手","宮城","秋田","山形","福島","東京","神奈川","埼玉","千葉","茨城","栃木","群馬","山梨","新潟","長野","富山","石川","福井","愛知","岐阜","静岡","三重","大阪","兵庫","京都","滋賀","奈良","和歌山","鳥取","島根","岡山","広島","山口","徳島","香川","愛媛","高知","福岡","佐賀","長崎","熊本","大分","宮崎","鹿児島","沖縄","海外"];
+const JOBS = ["経営者・役員", "会社員（正社員）", "会社員（契約社員・派遣社員）", "公務員", "自由業・フリーランス", "パート・アルバイト", "専業主婦（主夫）", "働いていない", "大学生・大学院生", "高校生", "中学生", "その他"];
+const EDU = ["中学校", "高等学校", "専門学校", "短期大学・高専", "大学", "大学院", "その他"];
+
+/* Gold-MSI 下位尺度（R は逆転項目：8 − 回答） */
+const REV = [9, 11, 13, 14, 17, 21, 23, 25, 27];
+const FACTORS = {
+  gmsi_active_engagement: [1, 3, 8, 15, 21, 24, 28, 34, 38],
+  gmsi_perceptual_abilities: [5, 6, 11, 12, 13, 18, 22, 23, 26],
+  gmsi_musical_training: [14, 27, 32, 33, 35, 36, 37],
+  gmsi_singing_abilities: [4, 7, 10, 17, 25, 29, 30],
+  gmsi_emotions: [2, 9, 16, 19, 20, 31],
+  gmsi_general_sophistication: [1, 3, 4, 7, 10, 12, 14, 15, 17, 19, 23, 24, 25, 27, 29, 32, 33, 37]
+};
+
+/* ===================== 状態 ===================== */
+const $ = id => document.getElementById(id);
+let A = {}, step = 0, startedAt = "";
+const DKEY = "gmsi_survey_draft", PKEY = "gmsi_survey_pending", AKEY = "gmsi_survey_archive";
+const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+             set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const saveDraft = () => ls.set(DKEY, { pid: $("pid").value.trim(), A, step, startedAt });
+
+/* ===================== 描画 ===================== */
+function chips(name, opts, values) {
+  return `<div class="chips">${opts.map((o, i) => `<label><input type="radio" name="${name}" value="${esc(values ? values[i] : o)}"><span>${esc(o)}</span></label>`).join("")}</div>`;
+}
+function card(id, no, text, body, optional) {
+  return `<div class="card" id="c_${id}" data-id="${id}"><div class="q">${no ? `<span class="no">${no}.</span>` : ""}<span>${text}${optional ? '<span class="opt">（無回答可）</span>' : ""}</span></div>${body}<div class="need">この質問にお答えください</div></div>`;
+}
+function build() {
+  $("likertList").innerHTML = LIKERT.map((t, i) => {
+    const n = i + 1;
+    return card("q" + n, n, esc(t),
+      `<div class="lik">${[1,2,3,4,5,6,7].map(v => `<label><input type="radio" name="q${n}" value="${v}" aria-label="${v} ${LIK_LABELS[v-1]}"><span>${v}</span></label>`).join("")}</div>
+       <div class="ends"><span>全くあてはまらない</span><span>実によくあてはまる</span></div><div class="picked" id="pk_q${n}"></div>`);
+  }).join("");
+  $("expList").innerHTML = EXP.map(e => card("q" + e.no, e.no, esc(e.text), chips("q" + e.no, e.opts, e.opts.map((_, i) => String(i + 1))))).join("")
+    + card("q39", 39, "私がもっとも得意な楽器は＿＿である", chips("q39", INSTR))
+    + card("q40", 40, "音楽を専門的に学ぶ大学あるいは専門学校等を卒業した（あるいは，予定である）",
+        chips("q40", ["はい", "いいえ"]) +
+        `<div class="follow hidden" id="f40"><div class="lbl">「はい」の方：専門とする楽器と，演奏を始めた年齢</div>
+          <div class="inline"><label style="flex:1;min-width:200px">楽器 <input type="text" name="q40_instrument" placeholder="例：ピアノ"></label>
+          <label>年齢 <input type="number" class="age" name="q40_start_age" inputmode="numeric" min="0" max="99"> 歳</label></div></div>`)
+    + card("q41", 41, "最初に習った楽器と，習い始めた年齢をお書きください",
+        `<div class="inline"><label style="flex:1;min-width:200px">楽器 <input type="text" name="q41_first_instrument" placeholder="例：ピアノ"></label>
+         <label>年齢 <input type="number" class="age" name="q41_first_age" inputmode="numeric" min="0" max="99"> 歳</label></div>
+         <label class="check"><input type="checkbox" name="q41_none" value="1"> 楽器を習ったことはない</label>`);
+  const other = (name, ph) => `<div class="follow hidden" id="f_${name}"><input type="text" name="${name}" placeholder="${ph}"></div>`;
+  $("profList").innerHTML =
+      card("genre", "", "最もよく聴くジャンルの音楽（一つだけ）", chips("genre", ["ロック・ポップス", "ジャズ", "クラシック"]))
+    + card("age", "", "年齢", `<div class="inline"><input type="number" class="age" name="age" inputmode="numeric" min="5" max="120"> 歳</div>`)
+    + card("gender", "", "性別", chips("gender", ["男性", "女性", "それ以外"]))
+    + card("prefecture", "", "住所（都道府県）", `<select name="prefecture"><option value="">選択してください</option>${PREFS.map(p => `<option>${p}</option>`).join("")}</select>`)
+    + card("occupation", "", "職業", chips("occupation", JOBS))
+    + card("education", "", "最終学歴", chips("education", EDU) + other("education_other", "その他の内容"))
+    + card("expected_education", "", "予想される最終学歴", chips("expected_education", EDU) + other("expected_education_other", "その他の内容"))
+    + card("native_japanese", "", "母国語は日本語ですか", chips("native_japanese", ["はい", "いいえ"]) + other("native_language", "母国語"))
+    + card("childhood_country", "", "幼少期および青少年期に過ごした国", chips("childhood_country", ["日本", "その他"]) + other("childhood_country_other", "国名"))
+    + card("residence_country", "", "現在の居住国", chips("residence_country", ["日本", "その他"]) + other("residence_country_other", "国名"))
+    + card("email", "", "Eメール", `<input type="email" name="email" inputmode="email" autocomplete="email" autocapitalize="off">`, true)
+    + card("name", "", "名前", `<input type="text" name="name" autocomplete="name">`, true);
+}
+
+/* 入力 → 回答（A）へ */
+function readInput(el) {
+  if (el.type === "radio") A[el.name] = el.value;
+  else if (el.type === "checkbox") A[el.name] = el.checked ? "1" : "";
+  else A[el.name] = el.value.trim();
+}
+function refreshFollow() {
+  $("f40").classList.toggle("hidden", A.q40 !== "はい");
+  const show = (id, on) => { const e = $("f_" + id); if (e) e.classList.toggle("hidden", !on); };
+  show("education_other", A.education === "その他"); show("expected_education_other", A.expected_education === "その他");
+  show("native_language", A.native_japanese === "いいえ"); show("childhood_country_other", A.childhood_country === "その他");
+  show("residence_country_other", A.residence_country === "その他");
+  const none = A.q41_none === "1";
+  document.querySelectorAll('[name=q41_first_instrument],[name=q41_first_age]').forEach(e => { e.disabled = none; });
+  for (let n = 1; n <= 31; n++) { const v = A["q" + n]; $("pk_q" + n).textContent = v ? `${v}：${LIK_LABELS[v - 1]}` : ""; }
+}
+function restoreInputs() {
+  document.querySelectorAll("main input, main select").forEach(el => {
+    if (!el.name || el.id === "pid") return;
+    const v = A[el.name];
+    if (el.type === "radio") el.checked = v === el.value;
+    else if (el.type === "checkbox") el.checked = v === "1";
+    else if (v != null) el.value = v;
+  });
+  refreshFollow();
+}
+
+/* ===================== 必須チェック ===================== */
+const STEP_IDS = {
+  1: LIKERT.map((_, i) => "q" + (i + 1)),
+  2: EXP.map(e => "q" + e.no).concat(["q39", "q40", "q41"]),
+  3: ["genre", "age", "gender", "prefecture", "occupation", "education", "expected_education", "native_japanese", "childhood_country", "residence_country"]
+};
+function answered(id) {
+  const has = k => A[k] != null && A[k] !== "";
+  const age = k => has(k) && /^\d{1,3}$/.test(A[k]);
+  switch (id) {
+    case "q40": return A.q40 === "いいえ" || (A.q40 === "はい" && has("q40_instrument") && age("q40_start_age"));
+    case "q41": return A.q41_none === "1" || (has("q41_first_instrument") && age("q41_first_age"));
+    case "age": return age("age");
+    case "education": return has("education") && (A.education !== "その他" || has("education_other"));
+    case "expected_education": return has("expected_education") && (A.expected_education !== "その他" || has("expected_education_other"));
+    case "native_japanese": return has("native_japanese") && (A.native_japanese === "はい" || has("native_language"));
+    case "childhood_country": return has("childhood_country") && (A.childhood_country === "日本" || has("childhood_country_other"));
+    case "residence_country": return has("residence_country") && (A.residence_country === "日本" || has("residence_country_other"));
+    default: return has(id);
+  }
+}
+const ALL_REQ = [].concat(STEP_IDS[1], STEP_IDS[2], STEP_IDS[3]);
+function updateBar() {
+  const done = ALL_REQ.filter(answered).length;
+  $("barFill").style.width = (done / ALL_REQ.length * 100) + "%";
+  $("barCount").textContent = `${done} / ${ALL_REQ.length} 問`;
+  $("barStep").textContent = `${step} / 3　${["", "あてはまる程度", "音楽経験", "あなたについて"][step]}`;
+  if (step >= 1) document.querySelectorAll(".card.missing").forEach(c => { if (answered(c.dataset.id)) c.classList.remove("missing"); });
+}
+
+/* ===================== 画面の切り替え ===================== */
+function show(s) {
+  step = s;
+  ["s0", "s1", "s2", "s3", "done"].forEach((id, i) => $(id).classList.toggle("hidden", id !== (s === 4 ? "done" : "s" + s)));
+  $("bar").classList.toggle("hidden", s === 0 || s === 4);
+  $("nav").classList.toggle("hidden", s === 4);
+  $("backBtn").classList.toggle("hidden", s <= 1);
+  $("nextBtn").textContent = s === 0 ? "回答をはじめる" : s === 3 ? "送信する" : "次へ";
+  updateBar(); window.scrollTo(0, 0);
+  if (s >= 1 && s <= 3) saveDraft();
+}
+async function next() {
+  if (step === 0) {
+    const inp = $("pid"); inp.value = inp.value.normalize("NFKC").trim();
+    if (!inp.value) { $("wErr").style.color = ""; $("wErr").textContent = "参加者IDを入力してください"; inp.classList.add("bad"); inp.focus(); return; }
+    const d = ls.get(DKEY, null);
+    if (d && d.pid === inp.value && d.A && Object.keys(d.A).length) { A = d.A; startedAt = d.startedAt || new Date().toISOString(); restoreInputs(); return show(Math.min(3, Math.max(1, d.step || 1))); }
+    A = {}; startedAt = new Date().toISOString(); restoreInputs(); return show(1);
+  }
+  const miss = STEP_IDS[step].filter(id => !answered(id));
+  if (miss.length) {
+    miss.forEach(id => $("c_" + id).classList.add("missing"));
+    $("c_" + miss[0]).scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  if (step < 3) return show(step + 1);
+  submit();
+}
+
+/* ===================== 送信 ===================== */
+const COLS = ["session_id", "participant", "started_at", "submitted_at", "duration_sec"]
+  .concat(LIKERT.map((_, i) => "q" + (i + 1)), EXP.map(e => "q" + e.no),
+    ["q39_best_instrument", "q40_music_school", "q40_instrument", "q40_start_age", "q41_first_instrument", "q41_first_age", "q41_none",
+     "genre", "age", "gender", "prefecture", "occupation", "education", "education_other", "expected_education", "expected_education_other",
+     "native_japanese", "native_language", "childhood_country", "childhood_country_other", "residence_country", "residence_country_other", "email", "name"],
+    Object.keys(FACTORS));
+function scores() {
+  const v = n => { const x = +A["q" + n]; return REV.includes(n) ? 8 - x : x; };
+  const o = {}; Object.entries(FACTORS).forEach(([k, items]) => { o[k] = items.reduce((s, n) => s + v(n), 0); });
+  return o;
+}
+function buildPayload() {
+  const pid = $("pid").value.trim(), now = new Date();
+  const row = Object.assign({}, A, scores(), {
+    participant: pid, started_at: startedAt, submitted_at: now.toISOString(),
+    duration_sec: Math.round((now - new Date(startedAt)) / 1000),
+    q39_best_instrument: A.q39, q40_music_school: A.q40
+  });
+  row.session_id = `${pid}_survey_${now.getTime().toString(36)}`;
+  const stamp = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  return { kind: "survey", session_id: row.session_id, trial_columns: [], trials: [],
+    summary_columns: COLS, summary: COLS.map(c => row[c] == null ? "" : row[c]), csv_name: `survey_${pid}_${stamp}.csv` };
+}
+async function post(p) {
+  let r;
+  try { r = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(p), redirect: "follow", cache: "no-store" }); }
+  catch (e) { return { ok: false, reason: navigator.onLine === false ? "インターネットに接続されていません" : "送信先から応答がありませんでした" }; }
+  let j = null; try { j = JSON.parse(await r.text()); } catch (e) {}
+  return j && j.ok ? { ok: true } : { ok: false, reason: j && j.error ? j.error : `応答を読めませんでした（HTTP ${r.status}）` };
+}
+let sending = false;
+async function sendPending() {
+  if (sending) return null; sending = true;
+  const list = ls.get(PKEY, []), left = []; let reason = "";
+  for (const p of list) { const r = await post(p); if (!r.ok) { left.push(p); reason = r.reason; } }
+  ls.set(PKEY, left); sending = false;
+  return { ok: !left.length, reason };
+}
+async function submit() {
+  $("nextBtn").disabled = true;
+  const p = buildPayload();
+  ls.set(PKEY, ls.get(PKEY, []).filter(x => x.session_id !== p.session_id).concat([p]));
+  const arch = ls.get(AKEY, []); arch.push({ session_id: p.session_id, at: p.summary[COLS.indexOf("submitted_at")] }); ls.set(AKEY, arch);
+  try { localStorage.removeItem(DKEY); } catch (e) {}
+  show(4); $("nextBtn").disabled = false;
+  await trySend();
+}
+async function trySend() {
+  const st = $("sendState"); st.className = ""; st.textContent = "回答を送信しています…"; $("retryBtn").classList.add("hidden");
+  const r = await sendPending();
+  if (!r) return;
+  if (r.ok) { st.className = "ok"; st.textContent = "回答を送信しました。このページを閉じてかまいません。"; }
+  else { st.className = "ng"; st.textContent = `送信できませんでした（${r.reason}）。\n回答はこの端末に保存されています。通信のよい場所で「もう一度送信する」を押すか，このページを開き直すと自動で送信されます。`; $("retryBtn").classList.remove("hidden"); }
+}
+
+/* ===================== 初期化 ===================== */
+build();
+document.querySelector("main").addEventListener("input", e => {
+  const el = e.target; if (!el.name || el.id === "pid") return;
+  readInput(el); refreshFollow(); updateBar(); saveDraft();
+});
+document.querySelector("main").addEventListener("change", e => {
+  const el = e.target; if (!el.name || el.id === "pid") return;
+  readInput(el); refreshFollow(); updateBar(); saveDraft();
+});
+$("nextBtn").onclick = next;
+$("backBtn").onclick = () => show(step - 1);
+$("retryBtn").onclick = trySend;
+$("pid").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); next(); } });
+$("pid").addEventListener("input", () => { $("pid").classList.remove("bad"); $("wErr").textContent = ""; });
+// 途中の回答があれば ID を入れておく
+const draft = ls.get(DKEY, null);
+if (draft && draft.pid) { $("pid").value = draft.pid; $("wErr").style.color = "var(--muted)"; $("wErr").textContent = "前回の途中から再開できます"; }
+// メニューから来た場合は「メニューに戻る」
+try { const ref = document.referrer ? new URL(document.referrer) : null;
+  if (ref && ref.origin === location.origin && ref.href !== location.href) ["backMenu", "backMenu2"].forEach(id => { $(id).href = ref.href; $(id).classList.remove("hidden"); }); } catch (e) {}
+// 前回送れなかった回答を自動で再送
+if (ls.get(PKEY, []).length) setTimeout(sendPending, 1500);
+show(0);
+</script>
+</body>
+</html>
