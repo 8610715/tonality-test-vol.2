@@ -374,7 +374,7 @@ const CONFIG = {
   ALTER_POS: [5, 6, 7],   // 改変できる位置（1始まり）
   LEAD_IN: 1.0,           // ボタンを押してから最初の和音までの秒数
   // Apps Script ウェブアプリのURL。ここに書いておくと毎回入力しなくて済みます（設定画面の入力が優先）
-  GAS_URL: "https://script.google.com/macros/s/AKfycbzqVCs1I1noldeUwtLq2lvfjjNrGADM7SsXZkmcNIKPaXJVb1arFlgg7qgSVeFyVmjfAQ/exec"
+  GAS_URL: "https://script.google.com/macros/s/AKfycbzbWMwnRI0rpx292d_a4dWUEf7pg6B5AakTEnoyP_gB0wKrsWGSc0biVArgif_gSgv7ng/exec"
 };
 // 調性内（ダイアトニック）の和音と表記ゆれ
 const DIATONIC = {
@@ -1194,6 +1194,8 @@ $("resendBtn").onclick = sendPending;
 loadEmbeddedNotes();
 $("soundMode").onchange = () => { if (!synthMode()) loadEmbedded(); };
 try { $("gasUrl").value = localStorage.getItem("tonality_test_gas_url") || CONFIG.GAS_URL; } catch (e) { $("gasUrl").value = CONFIG.GAS_URL; }
+// 以前の送信先（AKfycbzqVCs1…）が端末に記憶されていたら，新しい送信先に置き換える
+if ($("gasUrl").value.indexOf("AKfycbzqVCs1I1noldeUwtLq2lvfjjNrGADM7SsXZkmcNIKPaXJVb1arFlgg7qgSVeFyVmjfAQ") >= 0) { $("gasUrl").value = CONFIG.GAS_URL; try { localStorage.setItem("tonality_test_gas_url", CONFIG.GAS_URL); } catch (e) {} }
 $("gasUrl").onchange = () => { try { localStorage.setItem("tonality_test_gas_url", $("gasUrl").value.trim()); } catch (e) {} };
 updatePending();
 $("toggle").onclick = () => showSettings($("settings").classList.contains("hidden"));

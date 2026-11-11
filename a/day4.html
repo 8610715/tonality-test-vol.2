@@ -1053,7 +1053,7 @@ try {
 } catch (e) {}
 
 /* ===================== 追加：Google ドライブへの自動送信 ===================== */
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzqVCs1I1noldeUwtLq2lvfjjNrGADM7SsXZkmcNIKPaXJVb1arFlgg7qgSVeFyVmjfAQ/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzbWMwnRI0rpx292d_a4dWUEf7pg6B5AakTEnoyP_gB0wKrsWGSc0biVArgif_gSgv7ng/exec";
 const PKEY = "chord_learning_pending";
 const getPending = () => { try { return JSON.parse(localStorage.getItem(PKEY) || "[]"); } catch (e) { return []; } };
 const setPending = a => { try { localStorage.setItem(PKEY, JSON.stringify(a)); } catch (e) {} const n = a.length; $("pending").textContent = n ? `未送信：${n}件` : ""; };
