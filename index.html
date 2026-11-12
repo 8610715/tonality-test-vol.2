@@ -240,9 +240,8 @@
     <div class="card">
       <h3>調</h3>
       <label class="field"><span>基準の調</span><input id="baseKey" type="text" class="short" value="C" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-      <label class="field"><span>基準の調を試行ごとにランダム（12調）<small>比較は基準の調から下の移調幅で移調</small></span><input id="randomBase" type="checkbox" checked></label>
-      <label class="field"><span>属調へ移調<small>+7半音（上）または −5半音（下）。上下は試行ごとにランダム（Cuddy et al., 1981, 実験2）</small></span><input id="trDom" type="checkbox" checked></label>
-      <label class="field"><span>三全音へ移調<small>+6半音（上）または −6半音（下）。上下は試行ごとにランダム</small></span><input id="trTri" type="checkbox" checked></label>
+      <label class="field"><span>基準の調を試行ごとにランダム（12調）<small>比較も同じ幅だけ移調（「基準の調→移調先」の関係は保つ）</small></span><input id="randomBase" type="checkbox" checked></label>
+      <label class="field stack"><span>移調先</span><input id="targetKeys" type="text" value="F, G, Eb, A, Db, B" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     </div>
 
     <div class="card">
@@ -374,7 +373,7 @@ const CONFIG = {
   ALTER_POS: [5, 6, 7],   // 改変できる位置（1始まり）
   LEAD_IN: 1.0,           // ボタンを押してから最初の和音までの秒数
   // Apps Script ウェブアプリのURL。ここに書いておくと毎回入力しなくて済みます（設定画面の入力が優先）
-  GAS_URL: "https://script.google.com/macros/s/AKfycbzbWMwnRI0rpx292d_a4dWUEf7pg6B5AakTEnoyP_gB0wKrsWGSc0biVArgif_gSgv7ng/exec"
+  GAS_URL: "https://script.google.com/macros/s/AKfycbzqVCs1I1noldeUwtLq2lvfjjNrGADM7SsXZkmcNIKPaXJVb1arFlgg7qgSVeFyVmjfAQ/exec"
 };
 // 調性内（ダイアトニック）の和音と表記ゆれ
 const DIATONIC = {
@@ -577,7 +576,7 @@ function parseBases() {
 /* ===================== 声部連結（合成音モード） =====================
    ・低音：根音（E2〜G3の範囲で，前の低音から最も近い高さ）
    ・上3声：三和音の3音を1つずつ（G3〜G5），前の和音から動く量の合計が最小になる配置（共通音は保持）
-   ・比較：基準の配置を移調幅（属調 +7/-5，三全音 +6/-6 半音）だけそのまま平行移動。改変した和音だけを前後の和音に最短でつながるよう配置し直す */
+   ・比較：基準の配置を移調幅（-5〜+6半音）だけそのまま平行移動。改変した和音だけを前後の和音に最短でつながるよう配置し直す */
 const VL = { BASS: [40, 55], UP: [55, 79], START_BASS: 48, START_TOP: 72 };
 const QUAL_PCS = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
 function chordPcs(keyPc, ch) {
@@ -709,14 +708,11 @@ async function begin(dry) {
   if (synthMode()) await loadEmbeddedNotes();
   if (!synthMode() && Object.keys(EMBED_ABS).length && absCount() < Object.keys(EMBED_ABS).length) { setMsg(""); await loadEmbedded(); }
   const baseKey = $("baseKey").value, basePc = pcOf(baseKey);
-  // 移調方法（Cuddy, Cohen & Mewhort, 1981 実験2の「正しい移調」）
-  //   属調：+7半音（上）または −5半音（下） / 三全音：+6半音（上）または −6半音（下）。上下はランダム
-  const TR_TYPES = { dom: { label: "dominant", dist: 7, shifts: [7, -5] }, tri: { label: "tritone", dist: 6, shifts: [6, -6] } };
-  const trKinds = [...($("trDom").checked ? ["dom"] : []), ...($("trTri").checked ? ["tri"] : [])];
-  const targetPcs = basePc === undefined ? [] : trKinds.map(k => (basePc + TR_TYPES[k].dist) % 12);
+  const targets = $("targetKeys").value.split(/[,\s、]+/).filter(Boolean);
+  const targetPcs = targets.map(pcOf);
   const errs = [];
   if (basePc === undefined) errs.push(`基準の調「${baseKey}」が読めません`);
-  if (!trKinds.length) errs.push("移調の種類（属調・三全音）を1つ以上選んでください");
+  if (!targets.length || targetPcs.some(p => p === undefined)) errs.push("移調先の調名を確認してください（例：F, G, Eb, A, Db, B）");
   const { bases, errs: pErrs } = parseBases(); errs.push(...pErrs);
   const nSame = +$("nSame").value || 0, nOut = +$("nOut").value || 0, nIn = +$("nIn").value || 0;
   if (!bases.length) errs.push("基準シーケンスを入力してください");
@@ -734,11 +730,11 @@ async function begin(dry) {
   const { conds, notes: stratNotes, strat } = $("stratify").checked
     ? stratifiedConds(bases, nSame, nOut, nIn)
     : { conds: shuffle([...Array(nSame).fill("same"), ...Array(nOut).fill("out"), ...Array(nIn).fill("in")]), notes: [], strat: "off" };
-  // 移調の種類：条件ごとに属調・三全音を半数ずつ（奇数なら1問の差）
+  // 移調先：条件ごとに全移調先をなるべく均等に使う（6問以下なら同じ調は重ならない）
   const keyQueue = {};
   ["same", "out", "in"].forEach(c => {
     const n = conds.filter(x => x === c).length, q = [];
-    while (q.length < n) q.push(...shuffle(trKinds.slice()));
+    while (q.length < n) q.push(...shuffle(targetPcs.slice()));
     keyQueue[c] = shuffle(q.slice(0, n));
   });
   const list = [];
@@ -761,16 +757,16 @@ async function begin(dry) {
         alt = { pos, chord: pick(cand), auto: true };
       }
     }
-    const kind = $("stratify").checked ? keyQueue[cond].pop() : pick(trKinds);
+    const tPc = $("stratify").checked ? keyQueue[cond].pop() : pick(targetPcs);
     const comp = b.chords.slice();
     if (alt) comp[alt.pos - 1] = alt.chord;
-    // 移調幅：属調なら +7 / -5，三全音なら +6 / -6 のどちらかをランダムに
-    const d = pick(TR_TYPES[kind].shifts);
+    // 基準と比較の調の距離（「基準の調 → 移調先」の関係）。-5〜+6 半音
+    let d = ((tPc - basePc) % 12 + 12) % 12; if (d > 6) d -= 12;
     // 基準の調：試行ごとに12調から完全ランダム。比較も同じ幅だけ移調（相対関係はそのまま，絶対的な高さだけ変わる）
     const bPc = randomBase ? rand(12) : basePc, cPc = ((bPc + d) % 12 + 12) % 12;
-    const tr = { base: b, cond, alt, basePc: bPc, compPc: cPc, shift: d, trType: TR_TYPES[kind].label,
+    const tr = { base: b, cond, alt, basePc: bPc, compPc: cPc, shift: d,
       baseKey: randomBase ? keyName(bPc) : (keyNames[bPc] || baseKey),
-      compKey: keyName(cPc), comp };
+      compKey: randomBase ? keyName(cPc) : targets[targetPcs.indexOf(tPc)], comp };
     if (synthMode()) {
       const baseV = voiceSeq(bPc, b.chords);
       const compV = baseV.map(v => v && v.map(m => m + d));
@@ -893,7 +889,7 @@ function answer(ev) {
     changed_chord: t.alt ? t.alt.chord : "",
     alt_auto: t.alt ? (t.alt.auto ? 1 : 0) : "",
     difficulty: t.alt && t.alt.diff ? t.alt.diff : "", stratify: session.strat || "",
-    sound: t.baseV ? "synth" : "wav", shift_semitones: t.shift, transposition: t.trType,
+    sound: t.baseV ? "synth" : "wav", shift_semitones: t.shift,
     base_voicing: t.baseV ? voicingStr(t.baseV) : "", comp_voicing: t.compV ? voicingStr(t.compV) : "",
     base_seq: t.base.chords.join(" "), comp_seq: t.comp.join(" "),
     response: resp, correct: resp === correctResp ? 1 : 0, rt_ms: rt
@@ -937,7 +933,7 @@ document.querySelectorAll(".ans").forEach(b => b.addEventListener("click", answe
 const TRIAL_COLS = ["session_id","participant","group","start_time","end_time","trial","base_no","condition",
   "base_key","comp_key","changed_pos","original_chord","changed_chord","alt_auto","base_seq","comp_seq",
   "response","correct","rt_ms","answered_at","difficulty","stratify",
-  "sound","shift_semitones","base_voicing","comp_voicing","transposition"];
+  "sound","shift_semitones","base_voicing","comp_voicing"];
 const SUMMARY_COLS = ["session_id","participant","group","start_time","end_time","n_trials",
   "accuracy","acc_same","acc_out","acc_in","hit_rate","fa_rate","d_prime","criterion_c",
   "d_prime_out","d_prime_in","median_rt_ms"];
@@ -1194,8 +1190,8 @@ $("resendBtn").onclick = sendPending;
 loadEmbeddedNotes();
 $("soundMode").onchange = () => { if (!synthMode()) loadEmbedded(); };
 try { $("gasUrl").value = localStorage.getItem("tonality_test_gas_url") || CONFIG.GAS_URL; } catch (e) { $("gasUrl").value = CONFIG.GAS_URL; }
-// 以前の送信先（AKfycbzqVCs1…）が端末に記憶されていたら，新しい送信先に置き換える
-if ($("gasUrl").value.indexOf("AKfycbzqVCs1I1noldeUwtLq2lvfjjNrGADM7SsXZkmcNIKPaXJVb1arFlgg7qgSVeFyVmjfAQ") >= 0) { $("gasUrl").value = CONFIG.GAS_URL; try { localStorage.setItem("tonality_test_gas_url", CONFIG.GAS_URL); } catch (e) {} }
+// 改良後の送信先（AKfycbzbWMw…）が端末に記憶されていたら，改良前の送信先に戻す
+if ($("gasUrl").value.indexOf("AKfycbzbWMwnRI0rpx292d_a4dWUEf7pg6B5AakTEnoyP_gB0wKrsWGSc0biVArgif_gSgv7ng") >= 0) { $("gasUrl").value = CONFIG.GAS_URL; try { localStorage.setItem("tonality_test_gas_url", CONFIG.GAS_URL); } catch (e) {} }
 $("gasUrl").onchange = () => { try { localStorage.setItem("tonality_test_gas_url", $("gasUrl").value.trim()); } catch (e) {} };
 updatePending();
 $("toggle").onclick = () => showSettings($("settings").classList.contains("hidden"));

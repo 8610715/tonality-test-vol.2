@@ -176,13 +176,6 @@
   #endMsg { line-height: 1.8; }
   @media (orientation: landscape) and (max-height: 520px) { .steps li { font-size: 14px; padding-top: 8px; padding-bottom: 8px; } #welcome, #intro { gap: 10px; } }
   #backMenu { align-self: center; text-align: center; }
-  /* ===== 追加：自分で鳴らす回・コード名を消す回 ===== */
-  #instr.self   { background: #1e8a4c; color: #fff; }
-  #instr.recall { background: #6a3db3; color: #fff; }
-  .chip.q { color: #8e8e93; }
-  .key.ok { background: #1e8a4c !important; }
-  .key.ng { background: var(--err) !important; animation: shake .28s; }
-  @keyframes shake { 0%,100% { margin-left: 0; } 25% { margin-left: -1.2cqw; } 75% { margin-left: 1.2cqw; } }
 </style>
 </head>
 <body>
@@ -208,20 +201,12 @@
       <label class="field"><span>反復間の無音 (ms)</span><input id="gap" type="number" inputmode="numeric" value="2000" min="0" step="100"></label>
       <label class="field motor-only"><span>2回目以降もボタンを光らせる</span><input id="litPress" type="checkbox" checked></label>
     </div>
-    <div class="card">
-      <h3>自動再生のあと</h3>
-      <label class="field"><span>自分で鳴らす回数（コード名あり）</span><input id="selfReps" type="number" inputmode="numeric" value="2" min="0"></label>
-      <label class="field"><span>自分で鳴らす回数（コード名なし）</span><input id="recallReps" type="number" inputmode="numeric" value="2" min="0"></label>
-      <label class="field"><span>コード名なしの回はボタンの名前も消す</span><input id="hideKeys" type="checkbox" checked></label>
-      <label class="field motor-only"><span>続けて何回まちがえたら正解のボタンを光らせるか（0＝光らせない）</span><input id="hintAfter" type="number" inputmode="numeric" value="3" min="0"></label>
-      <div class="hint">正しいボタンを押したときだけ和音が鳴ります。運動なし群では，この回数ぶん自動再生を追加し，最後の回はコード名を消して再生します。</div>
-    </div>
     <div class="card wide">
       <details>
         <summary>コード進行リストを編集する（通常はそのままでOK）▾</summary>
-        <div class="hint">1行に1つ。前半が1日目・3日目，後半が2日目・4日目になります。末尾の x4 などで，その行だけ自動再生の回数を変えられます。</div>
+        <div class="hint">1行に1つ。末尾の x6 で反復回数。</div>
         <textarea id="seqText" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
-        <label class="field"><span>自動再生の回数（xの指定がない行）</span><input id="reps" type="number" inputmode="numeric" value="4" min="1"></label>
+        <label class="field"><span>反復回数（xの指定がない行）</span><input id="reps" type="number" inputmode="numeric" value="4" min="1"></label>
         <div class="btn-row"><button class="btn" id="resetSeq" type="button">初期リストに戻す</button></div>
       </details>
       <details>
@@ -305,7 +290,7 @@ window.addEventListener("unhandledrejection", e => {
    ===================================================================== */
 const GROUP = "match";
 const DEVICE = "mobile";
-/* 学習日：10進行を前半・後半に分け，1日目＝前半，2日目＝後半，3日目＝前半（2周目），4日目＝後半（2周目） */
+/* 学習日：20進行を前半・後半に分け，1日目＝前半，2日目＝後半，3日目＝前半（2周目），4日目＝後半（2周目） */
 const DAY = 1;
 const DAY_INFO = { 1: { half: 0, round: 1 }, 2: { half: 1, round: 1 }, 3: { half: 0, round: 2 }, 4: { half: 1, round: 2 } }[DAY];
 let SEQ_OFFSET = 0;
@@ -322,18 +307,26 @@ const GROUP_INFO = {
 }[GROUP];
 
 /* 学習するコード進行（初期リスト） */
-/* 1日あたり5進行（旧版の20進行から前半10進行を残した）。
-   各進行：自動再生4回 → 自分で鳴らす2回（コード名あり）→ 自分で鳴らす2回（コード名なし） */
-const DEFAULT_SEQS = `I V I
-I IV V I
-I IV I
-I IIm V I
-I V VIm I
-I VIm IV I
-I V IV I
-I IV VIm I
-I VIm V I
-I IIm IV I`;
+const DEFAULT_SEQS = `I V I x6
+I IV V I x6
+I IV I x4
+I IIm V I x4
+I V VIm I x4
+I VIm IV I x4
+I V IV I x4
+I IV VIm I x4
+I VIm V I x4
+I IIm IV I x4
+I VIm I x4
+I IIm I x4
+I IV IIm I x4
+I VIm IIm I x4
+I V IIm I x4
+I IIm VIm I x4
+I IIIm IV I x4
+I IIIm VIm I x4
+I IIIm V I x4
+I IIIm I x4`;
 
 /* 和音の定義（色・表記ゆれ） */
 const CHORDS = [
@@ -442,8 +435,6 @@ function refreshKeys() {
 /* ---------- コード進行の解析 ---------- */
 function parseSeqs() {
   const defReps = Math.max(1, parseInt($("reps").value) || 1);
-  const selfN = Math.max(0, parseInt($("selfReps").value) || 0);
-  const recallN = Math.max(0, parseInt($("recallReps").value) || 0);
   const out = [];
   $("seqText").value.split("\n").forEach(raw => {
     let line = raw.replace(/#.*/, "").trim();
@@ -452,7 +443,7 @@ function parseSeqs() {
     const m = line.match(/[x×]\s*(\d+)\s*$/i);
     if (m) { reps = parseInt(m[1]); line = line.slice(0, m.index).trim(); }
     const chords = line.split(/[\s,\-–—]+/).filter(Boolean).map(canon);
-    if (chords.length) out.push({ chords, reps, self: selfN, recall: recallN });
+    if (chords.length) out.push({ chords, reps });
   });
   const mid = Math.ceil(out.length / 2);
   SEQ_OFFSET = DAY_INFO.half ? mid : 0;
@@ -507,7 +498,7 @@ function buildMap() {
     const el = document.createElement(tag);
     el.className = c.q.length > 1 ? "key stack" : "key";
     el.style.background = MONO_COL;
-    el.innerHTML = keyLabel(c.id);
+    el.innerHTML = labelHTML(c.id);
     const [x, y] = P(slot.outside ? 45 : RB, slot.ang);
     el.style.left = x + "%"; el.style.top = y + "%";
     el.dataset.chord = c.id; el.dataset.key = pl.key; el.dataset.slot = pl.slot;
@@ -522,34 +513,16 @@ function setPhase(ph) {
   if (!GROUP_INFO.motor || ph === phase) return;
   phase = ph;
   const el = $("instr");
-  const T = PHASE_EXTRA[ph] || {
+  const T = {
     idle:    ["", GROUP_INFO.instr],
     listen:  ["banner listen", "1回目：まずは聴いてください（ボタンはまだ押しません）"],
     toPress: ["banner press",  "次の再生から，和音に合わせてボタンを押してください"],
     press:   ["banner press",  pressText()]
   }[ph];
   el.className = T[0]; el.textContent = T[1];
-  $("mapWrap").classList.toggle("listen", ["listen", "idle", "toSelf", "toRecall"].includes(ph));
+  $("mapWrap").classList.toggle("listen", ph === "listen" || ph === "idle");
 }
 const pressText = () => $("litPress").checked ? "和音に合わせて，光ったボタンを押してください" : "和音に合わせて，ボタンを押してください";
-const PHASE_EXTRA = {
-  toSelf:   ["banner press",  "次は自動では鳴りません。正しいボタンを押して，自分で和音を鳴らしてください"],
-  self:     ["banner self",   "上の進行のとおりにボタンを押してください（正しいボタンだけ音が鳴ります）"],
-  toRecall: ["banner recall", "次はコード名が消えます。覚えた進行を思い出して押してください"],
-  recall:   ["banner recall", "コード名なし：覚えた進行のとおりにボタンを押してください"]
-};
-
-/* ---------- コード名を消す ---------- */
-let hideNow = false;
-const keyLabel = id => (hideNow && $("hideKeys").checked) ? "" : labelHTML(id);
-function setHidden(h) {
-  hideNow = !!h;
-  Object.values(keyEls).forEach(el => { el.innerHTML = keyLabel(el.dataset.chord); });
-}
-/* 1つの進行の回数：自動再生 → 自分で鳴らす（名前あり）→ 自分で鳴らす（名前なし） */
-const totalReps = s => s.reps + s.self + s.recall;
-const autoReps = s => GROUP_INFO.motor ? s.reps : totalReps(s);   // 運動なし群はすべて自動再生
-const isHiddenRep = (s, r) => r >= s.reps + s.self;
 
 function setLit(e) {
   Object.values(keyEls).forEach(el => el.classList.remove("lit"));
@@ -563,19 +536,16 @@ function setLit(e) {
 
 /* ---------- 進行の表示 ---------- */
 function renderProg(chords, nowIdx) {
-  // コード名を消す回：まだ鳴らしていない和音は「?」。正しく鳴らした和音から名前を見せる
-  $("prog").innerHTML = chords.map((ch, i) => {
-    const done = nowIdx >= 0 && i < nowIdx, q = hideNow && !done;
-    return `<div class="chip${i === nowIdx ? " now" : ""}${done ? " done" : ""}${q ? " q" : ""}">${q ? "?" : labelHTML(ch)}</div>`;
-  }).join("");
+  $("prog").innerHTML = chords.map((ch, i) =>
+    `<div class="chip${i === nowIdx ? " now" : ""}${nowIdx >= 0 && i < nowIdx ? " done" : ""}">${labelHTML(ch)}</div>`
+  ).join("");
 }
 function showSeqInfo(i, rep) {
   const s = seqs[i];
   $("progress").textContent = s
-    ? `進行 ${i + 1} / ${seqs.length}` + (rep ? `　・　${rep} / ${totalReps(s)} 回目` : `　（${totalReps(s)} 回）`) : "";
+    ? `進行 ${i + 1} / ${seqs.length}` + (rep ? `　・　${rep} / ${s.reps} 回目` : `　（${s.reps} 回）`) : "";
 }
 function showSeq(i) {          // i 番目の進行を表示（配置も切り替え）
-  hideNow = false;
   placements = layoutFor(seqs[i]); buildMap();
   renderProg(seqs[i] ? seqs[i].chords : [], -1); showSeqInfo(i);
 }
@@ -640,122 +610,43 @@ async function playSeq(i) {
   const gap = Math.max(0, (parseFloat($("gap").value) || 0) / 1000);
   let t = ctx.currentTime + CONFIG.LEAD_IN;
   seqStart = t; events = []; sources = [];
-  for (let r = 0; r < autoReps(s); r++) {
+  for (let r = 0; r < s.reps; r++) {
     s.chords.forEach((ch, ci) => {
       const src = ctx.createBufferSource();
       src.buffer = buffers[key][ch]; src.connect(ctx.destination); src.start(t);
       sources.push(src);
-      events.push({ t, si: i, r, ci, chord: ch, dur: iv, hidden: isHiddenRep(s, r) });
+      events.push({ t, si: i, r, ci, chord: ch, dur: iv });
       t += iv;
     });
     t += gap;
   }
   endTime = t - gap;
-  ptr = -1; playing = true; mode = "auto";
+  ptr = -1; playing = true;
   $("stopBtn").disabled = false;
   log.push({ type: "seq_start", wall: new Date().toISOString(), seq: i + 1 + SEQ_OFFSET, key, progression: s.chords.join(" ") });
   requestAnimationFrame(tick);
 }
 
 function tick() {
-  if (!playing || mode !== "auto") return;
+  if (!playing) return;
   const now = ctxTimeAt(performance.now());
   while (ptr + 1 < events.length && events[ptr + 1].t <= now) ptr++;
   const s = seqs[cur];
   if (ptr >= 0) {
     const e = events[ptr];
-    const lastAuto = e.r === autoReps(s) - 1 && e.ci === s.chords.length - 1 && now >= e.t + e.dur;
-    if (lastAuto && GROUP_INFO.motor && s.self + s.recall > 0) setPhase(s.self > 0 ? "toSelf" : "toRecall");
-    else if (e.r > 0) setPhase("press");
-    else if (autoReps(s) > 1 && e.ci === s.chords.length - 1 && now >= e.t + e.dur) setPhase("toPress");
+    if (e.r > 0) setPhase("press");
+    else if (s.reps > 1 && e.ci === s.chords.length - 1 && now >= e.t + e.dur) setPhase("toPress");
     else setPhase("listen");
-    if (!!e.hidden !== hideNow) { setHidden(e.hidden); passiveInstr(e.hidden); }   // 運動なし群：最後の回はコード名を消す
     setLit(now < e.t + e.dur * CONFIG.LIGHT_RATIO ? e : null);
     renderProg(s.chords, now < e.t + e.dur ? e.ci : s.chords.length);
     showSeqInfo(cur, e.r + 1);
   } else { setLit(null); setPhase("listen"); }
-  if (now > endTime + 0.2) return autoDone();
+  if (now > endTime + 0.2) return finishSeq();
   requestAnimationFrame(tick);
-}
-function passiveInstr(hidden) {
-  if (GROUP_INFO.motor) return;
-  $("instr").textContent = hidden ? "コード名を消しています。進行を思い出しながら聴いてください" : GROUP_INFO.instr;
-}
-
-/* ---------- 自動再生のあと：自分で正しいボタンを押して鳴らす ---------- */
-let mode = null;                       // "auto"（自動再生）/ "self"（自分で鳴らす）/ null
-let selfRep = 0, selfStep = 0, selfWrong = 0, selfReady = false, selfLastPerf = 0, selfTimer = null;
-function autoDone() {
-  const s = seqs[cur];
-  if (!GROUP_INFO.motor || s.self + s.recall === 0) return finishSeq();
-  mode = "self"; selfReady = false; setLit(null);
-  renderProg(s.chords, s.chords.length);
-  const gap = Math.max(0, (parseFloat($("gap").value) || 0));
-  selfTimer = setTimeout(() => startSelfRep(s.reps), Math.max(gap, 1500));
-}
-function startSelfRep(r) {
-  const s = seqs[cur];
-  selfRep = r; selfStep = 0; selfWrong = 0; selfReady = true;
-  setLit(null);
-  setHidden(isHiddenRep(s, r));
-  setPhase(hideNow ? "recall" : "self");
-  renderProg(s.chords, 0);
-  showSeqInfo(cur, r + 1);
-  selfLastPerf = performance.now();
-  log.push({ type: hideNow ? "recall_rep_start" : "self_rep_start", wall: new Date().toISOString(), seq: cur + 1 + SEQ_OFFSET, rep: r + 1 });
-}
-function playNow(ch) {
-  const src = ctx.createBufferSource();
-  src.buffer = buffers[key][ch]; src.connect(ctx.destination); src.start(ctx.currentTime);
-  sources.push(src);
-  src.onended = () => { const k = sources.indexOf(src); if (k >= 0) sources.splice(k, 1); };
-}
-function flash(el, cls, ms) { el.classList.add(cls); setTimeout(() => el.classList.remove(cls), ms); }
-function onSelfPress(ev, el) {
-  const s = seqs[cur];
-  if (!selfReady || !s) return;
-  const target = s.chords[selfStep];
-  const targetKey = GROUP_INFO.layout === "fixed" ? target : "p" + selfStep;
-  const tpl = placements.find(pl => pl.key === targetKey);
-  const correct = el.dataset.chord === target;      // 同じ和音のボタンなら正解（音が鳴る）
-  const rt = Math.round((ev.timeStamp || performance.now()) - selfLastPerf);
-  saved = false;
-  log.push({
-    type: hideNow ? "recall_press" : "self_press", wall: new Date().toISOString(),
-    time_ms: Math.round((ctxTimeAt(ev.timeStamp || performance.now()) - seqStart) * 1000),
-    seq: cur + 1 + SEQ_OFFSET, rep: selfRep + 1, chord_index: selfStep + 1, key, chord: target,
-    target_button: target, pressed_button: el.dataset.chord,
-    target_slot: tpl ? tpl.slot : "", pressed_slot: Number(el.dataset.slot),
-    correct: correct ? 1 : 0, rt_ms: rt
-  });
-  if (!correct) {
-    flash(el, "ng", 300);
-    selfWrong++;
-    const n = parseInt($("hintAfter").value) || 0;
-    if (n > 0 && selfWrong === n) {
-      if (keyEls[targetKey]) keyEls[targetKey].classList.add("lit");
-      if (secEls[targetKey]) secEls[targetKey].classList.add("lit");
-      log.push({ type: "hint", wall: new Date().toISOString(), seq: cur + 1 + SEQ_OFFSET, rep: selfRep + 1, chord_index: selfStep + 1, key, chord: target });
-    }
-    return;
-  }
-  playNow(target);
-  setLit(null); flash(el, "ok", 250);
-  selfStep++; selfWrong = 0; selfLastPerf = ev.timeStamp || performance.now();
-  renderProg(s.chords, selfStep < s.chords.length ? selfStep : s.chords.length);
-  if (selfStep < s.chords.length) return;
-  // 1回分を押し終えた
-  selfReady = false;
-  const next = selfRep + 1;
-  const iv = Math.max(50, parseFloat($("interval").value) || 1000);
-  const gap = Math.max(0, parseFloat($("gap").value) || 0);
-  if (next >= totalReps(s)) { selfTimer = setTimeout(finishSeq, iv + 400); return; }
-  if (isHiddenRep(s, next) && !isHiddenRep(s, selfRep)) setTimeout(() => { if (mode === "self") setPhase("toRecall"); }, iv);
-  selfTimer = setTimeout(() => startSelfRep(next), iv + Math.max(gap, 800));
 }
 
 function finishSeq() {
-  playing = false; mode = null; clearTimeout(selfTimer); setHidden(false); passiveInstr(false); setLit(null); setPhase("idle");
+  playing = false; setLit(null); setPhase("idle");
   $("stopBtn").disabled = true;
   if (cur + 1 < seqs.length) {
     cur++;
@@ -776,7 +667,7 @@ function finishSeq() {
 
 function stopPlayback() {
   sources.forEach(s => { try { s.stop(); } catch (e) {} });
-  sources = []; playing = false; mode = null; selfReady = false; clearTimeout(selfTimer); passiveInstr(false); setLit(null); setPhase("idle");
+  sources = []; playing = false; setLit(null); setPhase("idle");
   $("stopBtn").disabled = true;
   log.push({ type: "stopped", wall: new Date().toISOString(), seq: cur + 1 + SEQ_OFFSET });
   if (seqs[cur]) {
@@ -800,7 +691,6 @@ function onPress(ev) {
   const el = ev.currentTarget;
   el.classList.add("pressed");
   setTimeout(() => el.classList.remove("pressed"), 120);
-  if (playing && mode === "self") return onSelfPress(ev, el);
   if (!playing || !events.length || phase === "listen") return;
   const t = ctxTimeAt(ev.timeStamp);
   let best = events[0];
@@ -868,8 +758,6 @@ $("resetSeq").onclick = () => { $("seqText").value = DEFAULT_SEQS; preview(); };
 $("fileInput").onchange = e => loadFiles(e.target.files);
 $("seqText").oninput = preview;
 $("reps").oninput = preview;
-$("selfReps").oninput = preview;
-$("recallReps").oninput = preview;
 $("beginBtn").onclick = confirmSettings;
 $("stopBtn").onclick = stopPlayback;
 $("saveBtn").onclick = saveLog;
@@ -889,7 +777,7 @@ function unlockAudio() {
 ["touchend", "click", "keydown"].forEach(t => document.addEventListener(t, unlockAudio, { capture: true, passive: true }));
 // アプリ切り替え・着信・画面ロックで中断されたら，その進行をやり直せるようにする（押したタイミングの記録が狂うため）
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden && playing && mode !== "self") stopPlayback();   // 自分で鳴らす回はタイミングを測らないので中断しない
+  if (document.hidden && playing) stopPlayback();
   else if (!document.hidden && ctx && ctx.state !== "running") { try { ctx.resume(); } catch (e) {} }
 });
 function holdNext(ms) {
@@ -909,10 +797,7 @@ function showWelcome() {
 function totalMinutes() {
   const iv = Math.max(0.05, (parseFloat($("interval").value) || 1000) / 1000);
   const gap = Math.max(0, (parseFloat($("gap").value) || 0) / 1000);
-  const sec = seqs.reduce((n, s) => {
-    const a = autoReps(s), m = totalReps(s) - a;   // 自分で鳴らす回は1和音あたり約2秒で見積もる
-    return n + CONFIG.LEAD_IN + a * s.chords.length * iv + (a - 1) * gap + m * (s.chords.length * 2 + iv + Math.max(gap, 0.8)) + 4;
-  }, 0);
+  const sec = seqs.reduce((n, s) => n + CONFIG.LEAD_IN + s.reps * s.chords.length * iv + (s.reps - 1) * gap + 4, 0);
   return Math.max(1, Math.round(sec / 60));
 }
 function showIntro() {
@@ -920,27 +805,19 @@ function showIntro() {
   $("welcome").classList.add("hidden"); $("endMsg").classList.add("hidden");
   $("introId").textContent = sessionPid;
   $("introDay").textContent = `今日は ${DAY}日目 です（全4日）`;
-  const tot = [...new Set(seqs.map(totalReps))].sort((a, b) => a - b);
-  const repTxt = tot.length === 1 ? `${tot[0]}回` : `${tot[0]}〜${tot[tot.length - 1]}回`;
+  const reps = [...new Set(seqs.map(s => s.reps))].sort((a, b) => a - b);
+  const repTxt = reps.length === 1 ? `${reps[0]}回` : `${reps[0]}〜${reps[reps.length - 1]}回`;
   const lit = $("litPress").checked;
-  const s0 = seqs[0] || { reps: 4, self: 0, recall: 0 };   // 説明文の回数は1つめの進行に合わせる
-  const A = s0.reps, S = s0.self, R = s0.recall;
-  const rng = (a, b) => a === b ? `${a}回目` : `${a}〜${b}回目`;
-  const keysToo = $("hideKeys").checked ? "画面上の和音名とボタンの名前" : "画面上の和音名";
-  const hint = parseInt($("hintAfter").value) || 0;
   const steps = GROUP_INFO.motor ? [
     `<b>「スタート」</b>を押すと，短いコード進行（和音のつながり）が流れます。同じ進行を<b>${repTxt}</b>くり返します。`,
     `<b>1回目は聴くだけ</b>です。ボタンは押さずに聴いてください。<br><span class="sub">画面上の帯にも「1回目：まずは聴いてください」と表示されます。</span>`,
-    A > 1 ? `<b>${rng(2, A)}</b>は，和音が鳴るのに合わせて${lit ? `，<b>光ったボタン</b>を押してください。<br><span class="sub">例：<span class="demo-key">V</span> → <span class="demo-key lit">V</span> のように黄色く光ります。</span>` : `，<b>その和音のボタン</b>を押してください。<br><span class="sub">2回目以降はボタンは光りません。</span>`}` : "",
-    S > 0 ? `<b>${rng(A + 1, A + S)}</b>は，音が<b>自動では鳴りません</b>。上に出ている進行を見ながら，<b>自分で正しいボタンを順に押して</b>和音を鳴らしてください。<br><span class="sub">まちがったボタンを押すと音は鳴らず，ボタンが赤くなります。急がなくてかまいません。</span>` : "",
-    R > 0 ? `<b>${rng(A + S + 1, A + S + R)}</b>は，${keysToo}が<b>消えます</b>。覚えた進行を思い出して，同じように押してください。<br><span class="sub">正しく押せた和音から名前が表示されます。${hint ? `${hint}回続けてまちがえると，正解のボタンが光ります。` : ""}</span>` : "",
+    `<b>2回目からは</b>，和音が鳴るのに合わせて${lit ? `，<b>光ったボタン</b>を押してください。<br><span class="sub">例：<span class="demo-key">V</span> → <span class="demo-key lit">V</span> のように黄色く光ります。</span>` : `，<b>その和音のボタン</b>を押してください。<br><span class="sub">2回目以降はボタンは光りません。</span>`}`,
     `1つの進行が終わったら，<b>「次へ」</b>で次の進行に進みます。全部で<b>${seqs.length}</b>個の進行があり，約<b>${totalMinutes()}</b>分かかります。<br><span class="sub">「次へ」は自分のタイミングで押してかまいません。</span>`
-  ].filter(Boolean) : [
+  ] : [
     `<b>「スタート」</b>を押すと，短いコード進行（和音のつながり）が流れます。同じ進行を<b>${repTxt}</b>くり返します。`,
     `画面の表示を見ながら，音をよく聴いてください。<b>ボタンを押す必要はありません。</b><br><span class="sub">いま鳴っている和音は，上の和音名が黄色くなって示されます。</span>`,
-    R > 0 ? `<b>最後の${R}回</b>は，${keysToo}が<b>消えます</b>。進行を思い出しながら聴いてください。` : "",
     `1つの進行が終わったら，<b>「次へ」</b>で次の進行に進みます。全部で<b>${seqs.length}</b>個の進行があり，約<b>${totalMinutes()}</b>分かかります。<br><span class="sub">「次へ」は自分のタイミングで押してかまいません。</span>`
-  ].filter(Boolean);
+  ];
   $("introSteps").innerHTML = steps.map(s => `<li>${s}</li>`).join("");
   $("intro").classList.remove("hidden");
   $("nextBtn").textContent = "スタート"; $("nextBtn").classList.remove("hidden");
@@ -998,7 +875,7 @@ function archiveSession() {
 }
 function updateArchiveInfo() { const n = getArchive().length; $("archiveInfo").textContent = n ? `端末内に保存済みのセッション：${n}件` : ""; }
 const LOG_COLS = ["participant","group","device","day","type","wall","seq","progression","rep","chord_index","key","chord",
-  "time_ms","target_button","pressed_button","target_slot","pressed_slot","correct","asynchrony_ms","rt_ms"];
+  "time_ms","target_button","pressed_button","target_slot","pressed_slot","correct","asynchrony_ms"];
 function csvOf(entries) {
   const esc = v => /[",\n\r]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v;
   const lines = [LOG_COLS.join(",")];
@@ -1053,7 +930,7 @@ try {
 } catch (e) {}
 
 /* ===================== 追加：Google ドライブへの自動送信 ===================== */
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzbWMwnRI0rpx292d_a4dWUEf7pg6B5AakTEnoyP_gB0wKrsWGSc0biVArgif_gSgv7ng/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzqVCs1I1noldeUwtLq2lvfjjNrGADM7SsXZkmcNIKPaXJVb1arFlgg7qgSVeFyVmjfAQ/exec";
 const PKEY = "chord_learning_pending";
 const getPending = () => { try { return JSON.parse(localStorage.getItem(PKEY) || "[]"); } catch (e) { return []; } };
 const setPending = a => { try { localStorage.setItem(PKEY, JSON.stringify(a)); } catch (e) {} const n = a.length; $("pending").textContent = n ? `未送信：${n}件` : ""; };
